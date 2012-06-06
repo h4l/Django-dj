@@ -34,6 +34,8 @@ if __name__ == "__main__":
     
     try:
         run_manage_py(manage_py_path, sys.argv[1:])
+    except KeyboardInterrupt:
+        pass
     except Exception:
         print >> sys.stderr, "Error running command: '%s'" % manage_py_path
         print >> sys.stderr, "       with arguments: %s" % sys.argv[1:]
