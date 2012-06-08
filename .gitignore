@@ -1,0 +1,5 @@
+.project
+.pydevproject
+MANIFEST
+build/*
+dist/*
