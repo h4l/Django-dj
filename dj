@@ -99,7 +99,7 @@ def no_project_found(search_start):
     for filename in sorted(DJANGO_PROJECT_DIR_FILES):
         print >> sys.stderr, "    - %s" % filename
 
-if __name__ == "__main__":
+def main():
     search_start = os.getcwd()
 
     # find the closest Django project dir in or above the current dir
@@ -110,3 +110,5 @@ if __name__ == "__main__":
 
     run_manage(django_project_dir, sys.argv)
 
+if __name__ == "__main__":
+    main()
