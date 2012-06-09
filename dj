@@ -23,20 +23,21 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Save this as 'dj' and put it somewhere on your PATH (e.g. ~/bin).
-#
-# Usage: $ dj [manage.py args ...]
-# e.g.:
-#     $ dj runserver
-# 
-# Locates a manage.py file in a parent of the current directory and executes it
-# with the arguments to this script.
+# Scans for Django a project in a nearby directory and runs Django's management
+# in the context of the project. 
+
+from django.core.management import execute_from_command_line
+from itertools import ifilter
+import logging
 import os
 from os import path
 import sys
-from django.core.management import execute_from_command_line
 
-DJANGO_SETTINGS_MODULE = "DJANGO_SETTINGS_MODULE"
+LOG = logging.getLogger(__name__)
+LOG_FORMAT = "%(levelname)s: %(message)s"
+
+ENVAR_DJ_EXPLAIN = "DJ_EXPLAIN"
+ENVAR_SETTINGS_MODULE = "DJANGO_SETTINGS_MODULE"
 
 DJANGO_SETTINGS_FILE = "settings.py"
 DJANGO_URLS_FILE = "urls.py"
@@ -45,70 +46,145 @@ PYTHON_INIT_FILE = "__init__.py"
 DJANGO_PROJECT_DIR_FILES = set(
         [DJANGO_SETTINGS_FILE, DJANGO_URLS_FILE, PYTHON_INIT_FILE])
 
-def is_django_project_dir(path):
-    """Determines if a directory seems to be a Django project dir."""
+DJANGO_PROJECT_MARKER = ".djangoproject"
+
+def list_dir(dir_path):
+    "Lists the contents of dir_path as a tuple: (dir_path, dirnames, filenames)"
+    files = set(os.listdir(dir_path))
+    dirs = set(filter(path.isdir, files))
+    return (dir_path, dirs, files - dirs)
+
+def walk_up(dir_path):
+    "As os.walk(dir_path) except the tree is walked upwards rather than down."
+    current_dir = dir_path
+    while True:
+        yield list_dir(current_dir)
+        parent_dir = path.dirname(current_dir)
+        if parent_dir == current_dir:
+            return
+        current_dir = parent_dir
+
+def candidate_dirs(start_dir_path):
+    """Enumerates the dirs which should be searched when looking for Django 
+    projects.
+    """
+    LOG.debug("Starting search from: %s" % start_dir_path)
+    for dir_path, dirs, files in walk_up(start_dir_path):
+        if not DJANGO_PROJECT_MARKER in files:
+            LOG.debug("[ascending] Checking: %s" % dir_path)
+            yield (dir_path, dirs, files)
+        else:
+            LOG.debug("Found %s file in: %s, will descend into this subtree" % (
+                    DJANGO_PROJECT_MARKER, dir_path))
+            for dir_path, dirs, files in os.walk(dir_path):
+                LOG.debug("[descending] Checking: %s" % dir_path)
+                yield (dir_path, dirs, files)
+
+def is_django_project_dir(listing):
+    """Determines if directory seems to be the root of a Django project.
+    
+    Args:
+        listing: A (dirpath, dirnames, filenames) tuple as produced by os.walk()
+    Returns: True if the directory seems to be a Django project.
+    """
+    _, _, files = listing
     # Check if the set of files in the dir at path are a superset of the files
-    # which a dir must contain for it to be considered a Django project. 
-    return set(os.listdir(path)) >= DJANGO_PROJECT_DIR_FILES
+    # which a dir must contain for it to be considered a Django project.
+    return set(files) >= DJANGO_PROJECT_DIR_FILES
 
-def find_parent_dir(dir_path, predicate):
-    if predicate(dir_path):
+def find_django_project(start_dir_path):
+    projects = ifilter(is_django_project_dir, candidate_dirs(start_dir_path))
+    try:
+        dir_path, _, _ = projects.next()
         return dir_path
-
-    parent_dir = path.dirname(dir_path)
-    if parent_dir == dir_path:
+    except StopIteration:
         return None
-    return find_parent_dir(parent_dir, predicate)
 
 def default_settings_module(django_project_dir):
     return "%s.settings" % path.basename(django_project_dir)
 
-def ensure_settings_exists(settings_module):
+def is_settings_importable(settings_module):
     try:
         __import__(settings_module)
-    except NameError:
-        print >> sys.stderr, ("Could not import settings module: %s" %
-                settings_module)
-        print >> sys.stderr, ("Python traceback follows:")
-        print >> sys.stderr
-        raise
+        return True
+    except:
+        LOG.exception("Could not import settings module: %s Python traceback "
+                "follows:" % settings_module)
+        return False
 
 def run_manage(django_project_dir, args):
     assert django_project_dir == path.abspath(django_project_dir)
     # Set a default value for the settings module envar
-    os.environ.setdefault(DJANGO_SETTINGS_MODULE,
+    os.environ.setdefault(ENVAR_SETTINGS_MODULE,
             default_settings_module(django_project_dir))
 
     # Setup the sys path as it would be when running from manage.py in the
     # parent dir of a Django project 
     project_parent = path.dirname(django_project_dir)
     sys.path.insert(0, project_parent)
+    LOG.debug("Inserting parent directory of Django project into the "
+            "PYTHONPATH: %s" % project_parent)
 
     # Get the settings module to use and ensure it exists...
-    settings_module = os.environ.get(DJANGO_SETTINGS_MODULE)
-    ensure_settings_exists(settings_module)
+    settings_module = os.environ.get(ENVAR_SETTINGS_MODULE)
+    LOG.debug("Using settings module: %s" % settings_module)
+    if not is_settings_importable(settings_module):
+        return 2
 
-    # Run the management tool
+    LOG.debug("Invoking the Django management tool.")
+    # Run the management tool. Settings module is implicitly passed as an 
+    # environment variable, and our changes to the sys.path allow the project's
+    # code to be imported.
     execute_from_command_line(sys.argv)
+    return 0
 
 def no_project_found(search_start):
-    print >> sys.stderr, ("Error: Couldn't find a Django project in '%s' or "
-            "parent directories." % (search_start))
-    print >> sys.stderr, ("  A dir is considered a Django project if it "
-            "contains the files:")
-    for filename in sorted(DJANGO_PROJECT_DIR_FILES):
-        print >> sys.stderr, "    - %s" % filename
+    files = "\n".join(["    %s" % name for name in
+            sorted(DJANGO_PROJECT_DIR_FILES)])
+
+    LOG.error("""
+Couldn't find a Django project in '%s' or parent directories.
+
+If your Django project is not in a parent of this directory, create an empty
+file named .djangoproject in a common parent of your project and this directory.
+dj will then search the directories inside the common parent rather than only 
+checking its parents.
+
+A dir is considered a Django project if it contains the files:
+%s
+
+To make dj explain which directories it's looking in, run:
+  $ export DJ_EXPLAIN=
+
+You can turn this off with:
+  $ unset DJ_EXPLAIN""".strip() % (search_start, files))
+    return 1
+
+def configure_messages():
+    "Configures the Python logging module to report our messages."
+    # If the DJ_EXPLAIN envar is set then we'll report all messages 
+    if os.environ.get(ENVAR_DJ_EXPLAIN) is not None:
+        level = logging.DEBUG
+    else:
+        # Otherwise just report errors
+        level = logging.ERROR
+    # Log messages to stderr
+    logging.basicConfig(level=level, format=LOG_FORMAT)
+    LOG.debug("Explanations are enabled. unset %s to disable." %
+            ENVAR_DJ_EXPLAIN)
 
 def main():
+    configure_messages()
+
     search_start = os.getcwd()
 
     # find the closest Django project dir in or above the current dir
-    django_project_dir = find_parent_dir(search_start, is_django_project_dir)
+    django_project_dir = find_django_project(search_start)
     if not django_project_dir:
-        no_project_found(search_start)
-        sys.exit(1)
+        return no_project_found(search_start)
 
-    run_manage(django_project_dir, sys.argv)
+    LOG.debug("Found Django project at: %s" % django_project_dir)
+    return run_manage(django_project_dir, sys.argv)
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

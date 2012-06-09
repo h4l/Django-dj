@@ -46,3 +46,53 @@ Or with ``easy_install`` run::
 
 Alternatively, you can manually install by copying the ``dj`` file to somewhere
 on your ``$PATH``, perhaps ``~/bin/``.
+
+How dj finds Django projects
+----------------------------
+
+As mentioned above, ``dj`` identifys Django projects by looking for directories
+containing the following files:
+
+* ``__init__.py``
+* ``settings.py``
+* ``urls.py``
+
+If a directory contains all 3 files then ``dj`` takes it to be a Django project
+and tries to run Django's management tool on it.
+
+Search Strategy
++++++++++++++++
+
+The directories ``dj`` looks in are chosen as follows. The search starts in the
+working directory this script is executed from and moves upwards to the parent
+directory, and then the parent's parent directory and so forth until either a
+Django project is found, or the root of the filesystem is reached.
+
+If a file named ``.djangoproject`` is encountered during the search, a complete
+search of the subtree at the directory holding the ``.djangoproject`` file is 
+triggered.
+
+Invoking ``dj`` from sibling directories of a Django project
+------------------------------------------------------------
+
+The strategy of looking through the parent directories works well so long
+as long as ``dj`` is executed from a child directory of the Django project. 
+Consider the following project structure::
+
+  myproject/
+  |-- staticfiles/
+      |-- somefile.jpg
+      |-- somefile.png
+      |-- somefile.gif
+  |-- django-project/
+      |-- urls.py
+      |-- settings.py
+      |-- __init__.py
+
+If you run ``dj`` from inside ``staticfiles``, it won't find ``django-project``
+because it will just check parents of ``staticfiles``, and ``django-project`` is
+not a parent of ``staticfiles``. You can make ``dj`` find ``django-project`` by
+creating an empty file called ``.djangoproject`` in in a common parent of 
+``staticfiles`` and ``django-project``. In this case creating it in 
+``myproject`` would work. This will tell dj to do a full search of all
+directories under ``myproject``  rather than just its parents.
