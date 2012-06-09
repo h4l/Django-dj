@@ -23,7 +23,7 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 # POSSIBILITY OF SUCH DAMAGE.
 
-# Scans for Django a project in a nearby directory and runs Django's management
+# Looks for a Django project in nearby directories and runs Django's management
 # in the context of the project. 
 
 from django.core.management import execute_from_command_line
