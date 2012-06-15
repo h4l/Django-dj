@@ -135,7 +135,7 @@ def run_manage(django_project_dir, args):
     # Run the management tool. Settings module is implicitly passed as an 
     # environment variable, and our changes to the sys.path allow the project's
     # code to be imported.
-    execute_from_command_line(sys.argv)
+    execute_from_command_line(args)
     return 0
 
 def no_project_found(search_start):
