@@ -1,6 +1,12 @@
 ``dj`` Changelog
 ================
 
+0.2.1 - 2012-08-05
+------------------
+
+dj no longer modifies the global logging config. Previously Django error logs
+were shown when they would usually be hidden.
+
 0.2.0 - 2012-06-09
 ------------------
 

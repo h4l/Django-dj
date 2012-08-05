@@ -169,7 +169,10 @@ def configure_messages():
         # Otherwise just report errors
         level = logging.ERROR
     # Log messages to stderr
-    logging.basicConfig(level=level, format=LOG_FORMAT)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(fmt=LOG_FORMAT))
+    LOG.addHandler(handler)
+    LOG.setLevel(level)
     LOG.debug("Explanations are enabled. unset %s to disable." %
             ENVAR_DJ_EXPLAIN)
 
