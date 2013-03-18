@@ -43,12 +43,12 @@ LOG_FORMAT = "%(levelname)s: %(message)s"
 ENVAR_DJ_EXPLAIN = "DJ_EXPLAIN"
 ENVAR_SETTINGS_MODULE = "DJANGO_SETTINGS_MODULE"
 
-DJANGO_SETTINGS_FILE = "settings.py"
-DJANGO_URLS_FILE = "urls.py"
-PYTHON_INIT_FILE = "__init__.py"
+PYTHON_MODULE_EXTENSIONS = ["py", "pyc", "pyo"]
 
-DJANGO_PROJECT_DIR_FILES = set(
-    [DJANGO_SETTINGS_FILE, DJANGO_URLS_FILE, PYTHON_INIT_FILE])
+DJANGO_SETTINGS_MODULE = "settings"
+DJANGO_URLS_MODULE = "urls"
+
+DJANGO_PROJECT_SUBMODULES = [DJANGO_SETTINGS_MODULE, DJANGO_URLS_MODULE]
 
 DJANGO_PROJECT_MARKER = ".djangoproject"
 
@@ -73,6 +73,91 @@ def walk_up(dir_path):
         if parent_dir == current_dir:
             return
         current_dir = parent_dir
+
+
+def module_exists(from_dir, module):
+    """
+    Attempts to determine if a Python module dotted name seems to exist in a
+    given directory. This test is rather simplistic as it doesn't actually
+    import any modules, so it can't find things like modules being assigned to
+    variables in a package. It can only find packages/modules present as files,
+    i.e.:
+
+    "foo" could be:
+      ./foo.py
+      ./foo.pyc
+      ./foo/
+          __init__.py
+
+    "foo.bar" could be:
+      ./foo/
+          __init__.py
+          bar/
+            __init__.py
+    or:
+      ./foo/
+          __init__.py
+          bar.py
+
+    Args:
+        from_dir: The path of the directory to look for the module in.
+        module: The module's dotted name, e.g. "someproj.settings.foo"
+    Returns:
+        True if the module seems to exist on disk.
+    """
+    if not module:
+        raise ValueError("No module provided.")
+
+    module_components = module.split(".")
+    component, rest = module_components[0], module_components[1:]
+
+    possible_paths = [
+        os.path.join(from_dir, module_path)
+        for module_path in
+        possible_module_paths(component, known_to_be_package=len(rest) > 0)]
+
+    component_exists = any(
+        os.path.isfile(module_path)
+        for module_path in possible_paths)
+
+    if not rest:
+        return component_exists
+
+    # Recursively look for child modules
+    return component_exists and module_exists(
+        os.path.join(from_dir, component),
+        ".".join(rest)
+    )
+
+
+def possible_module_paths(module_name, known_to_be_package=None):
+    """
+    Generates the possible relative paths to a module.
+
+    >>> list(possible_module_paths("some_mod"))
+    ['some_mod.py', 'some_mod/__init__.py', 'some_mod.pyc',
+    'some_mod/__init__.pyc', 'some_mod.pyo', 'some_mod/__init__.pyo']
+    >>> list(possible_module_paths("some_mod", known_to_be_package=True))
+    ['some_mod/__init__.py', 'some_mod/__init__.pyc', 'some_mod/__init__.pyo']
+
+    Args:
+        module_name: The name of a single component of a module/package
+            (no dots).
+        known_to_be_package: True if the module_name is known to be a package
+            (dir w/ __init__ file) rather than a simple module.
+    Yields:
+        The possible paths for the module, relative to the module's home
+        directory.
+    """
+    for ext in PYTHON_MODULE_EXTENSIONS:
+        # If we know that this module_name is a package (e.g. dir w/ __init__
+        # file) then we can skip looking for individual files.
+        if known_to_be_package is not True:
+            yield "%s.%s" % (module_name, ext)
+
+        # The module could be in a directory of its own name containing an
+        # __init__ file.
+        yield os.path.join(module_name, "__init__.%s" % ext)
 
 
 def candidate_dirs(start_dir_path):
@@ -103,10 +188,24 @@ def is_django_project_dir(listing):
             os.walk()
     Returns: True if the directory seems to be a Django project.
     """
-    _, _, files = listing
-    # Check if the set of files in the dir at path are a superset of the files
-    # which a dir must contain for it to be considered a Django project.
-    return set(files) >= DJANGO_PROJECT_DIR_FILES
+    dirpath, _, _ = listing
+
+    # Import from the directory's parent
+    import_dir = path.dirname(dirpath)
+    # Use the directory name as the module name. E.g. /some/dir/fooproj would
+    # turn into fooproj.settings or fooproj.urls below
+    project_module = path.basename(dirpath)
+
+    # Construct the required module names by combining the dir name with each
+    # of the submodules typically occuring in a Django project package
+    required_modules = (
+        "%s.%s" % (project_module, submodule)
+        for submodule in DJANGO_PROJECT_SUBMODULES)
+
+    # Determine if all the modules seem to exist on disk.
+    return all(
+        module_exists(import_dir, module)
+        for module in required_modules)
 
 
 def find_django_project(start_dir_path):
@@ -191,7 +290,7 @@ def no_project_found(search_start):
     from the directory specified by search_start.
     """
     files = "\n".join(["    %s" % name for name in
-            sorted(DJANGO_PROJECT_DIR_FILES)])
+            sorted(DJANGO_PROJECT_SUBMODULES)])
 
     LOG.error("""
 Couldn't find a Django project in '%s' or parent directories.
@@ -201,8 +300,12 @@ empty file named .djangoproject in a common parent of your project and
 this directory. dj will then search the directories inside the common
 parent rather than only checking its parents.
 
-A dir is considered a Django project if it contains the files:
+A dir is considered a Django project if it is a Python package
+(contains an __init__.py[co] file) and contains the sub modules:
 %s
+
+(The modules can either be plain .py[co] files, or a directory with an
+__init__.py[co] file.)
 
 To make dj explain which directories it's looking in, run:
   $ export DJ_EXPLAIN=
