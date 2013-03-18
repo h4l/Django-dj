@@ -28,12 +28,14 @@ Looks for a Django project in nearby directories and runs Django's management
 in the context of the project.
 """
 
-from django.core.management import execute_from_command_line
-from itertools import ifilter
+from __future__ import unicode_literals
+
 import logging
 import os
 from os import path
 import sys
+
+from django.core.management import execute_from_command_line
 
 LOG = logging.getLogger(__name__)
 LOG_FORMAT = "%(levelname)s: %(message)s"
@@ -115,12 +117,12 @@ def find_django_project(start_dir_path):
         start_dir_path: The path to search from.
     Returns: The path to the first Django project found.
     """
-    projects = ifilter(is_django_project_dir, candidate_dirs(start_dir_path))
-    try:
-        dir_path, _, _ = projects.next()
+    projects = (candidate for candidate in candidate_dirs(start_dir_path)
+                if is_django_project_dir(candidate))
+
+    for dir_path, _, _ in projects:
         return dir_path
-    except StopIteration:
-        return None
+    return None
 
 
 def default_settings_module(django_project_dir):
