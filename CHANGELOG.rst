@@ -1,6 +1,16 @@
 ``dj`` Changelog
 ================
 
+0.3.0 - 2013-03-18
+------------------
+
+``dj`` is now more intelligent about looking for 'urls' and 'settings' submodules
+in Django projects. As well as normal ``<module>.py`` files, it also looks for
+``<module>/__init__.py``, and checks for alternate file extensions (``.pyo``/
+``.pyc``).
+
+Python 3 is now supported as well.
+
 0.2.1 - 2012-08-05
 ------------------
 

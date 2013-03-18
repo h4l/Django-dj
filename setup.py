@@ -8,11 +8,11 @@ with open(README) as f:
 
 setup(
     name="Django-dj",
-    version="0.2.0",
+    version="0.3.0",
     description=("A short command which replaces calls to Django's manage.py "
             "scripts"),
     author="Hal Blackburn",
-    author_email="hwtb2@caret.cam.ac.uk",
+    author_email="hal@caret.cam.ac.uk",
     url="https://github.com/h4l/Django-dj",
     scripts=["dj"],
     requires=[
@@ -28,6 +28,7 @@ setup(
         "Programming Language :: Python",
         "Programming Language :: Python :: 2.6",
         "Programming Language :: Python :: 2.7",
+        "Programming Language :: Python :: 3",
         "Operating System :: OS Independent",
         "Development Status :: 4 - Beta",
         "Topic :: Internet :: WWW/HTTP",

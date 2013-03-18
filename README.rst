@@ -30,8 +30,8 @@ Instead of carefully referencing ``manage.py`` from whichever directory you
 happen to be in, ``dj`` works anywhere in or under your Django project 
 directory. You can even completely remove your ``manage.py`` file if you wish.
 
-``dj`` identifies Django projects by looking for directories containing 
-``__init__.py``, ``settings.py`` and ``urls.py``.
+``dj`` identifies Django projects by looking for directories which are Python
+packages containing ``settings`` and ``urls`` submodules.
 
 Installing
 ----------
@@ -47,18 +47,24 @@ Or with ``easy_install`` run::
 Alternatively, you can manually install by copying the ``dj`` file to somewhere
 on your ``$PATH``, perhaps ``~/bin/``.
 
-How dj finds Django projects
+How ``dj`` finds Django projects
 ----------------------------
 
 As mentioned above, ``dj`` identifys Django projects by looking for directories
-containing the following files:
+which are Python packages (e.g. contain an ``__init__.py[oc]`` file) containing
+the following submodules:
 
-* ``__init__.py``
-* ``settings.py``
-* ``urls.py``
+* ``settings``
+* ``urls``
 
-If a directory contains all 3 files then ``dj`` takes it to be a Django project
-and tries to run Django's management tool on it.
+If a package directory contains both submodules then ``dj`` takes it to be a
+Django project and tries to run Django's management tool on it.
+
+Python modules/packages are identified by looking for ``.py``/``.pyc``/``.pyo``
+files of the correct name, or directories of the correct name containing a
+``__init__.py``/``.pyc``/``.pyo`` file. For performance and security reasons
+Python's own import functionality is not used (no Python modules are executed
+while searching for Django projects).
 
 Search Strategy
 +++++++++++++++
