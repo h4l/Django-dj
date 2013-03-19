@@ -37,6 +37,8 @@ import sys
 
 from django.core.management import execute_from_command_line
 
+VERSION = (0, 3, 0)
+
 LOG = logging.getLogger(__name__)
 LOG_FORMAT = "%(levelname)s: %(message)s"
 
@@ -333,11 +335,27 @@ def configure_messages():
         ENVAR_DJ_EXPLAIN)
 
 
+def show_version():
+    """
+    Print our version to stderr if --version was the only argument.
+
+    This should be the only time that our output differs from
+    what you'd get running manage.py (aside from debugging messages
+    controlled by DJ_EXPLAIN).
+    """
+    if len(sys.argv) == 2 and sys.argv[1] == "--version":
+        sys.stderr.write(
+            "dj version: %s. Django version follows...\n"
+            % ".".join(str(code) for code in VERSION))
+
+
 def main():
     """
     Run the Django management command on a Django project located
     by searching from the current working directory.
     """
+    show_version()
+
     configure_messages()
 
     search_start = os.getcwd()
